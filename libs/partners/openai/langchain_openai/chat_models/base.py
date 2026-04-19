@@ -4515,6 +4515,7 @@ def _construct_lc_result_from_responses_api(
                     "error": error,
                 }
                 invalid_tool_calls.append(tool_call)
+
         elif output.type == "custom_tool_call":
             content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
             tool_call = {
@@ -4524,6 +4525,17 @@ def _construct_lc_result_from_responses_api(
                 "id": output.call_id,
             }
             tool_calls.append(tool_call)
+
+        elif output.type == "computer_call":
+            content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
+            tool_call = {
+                "type": "tool_call",
+                "name": "computer",
+                "args": {"actions": output.actions},
+                "id": output.call_id,
+            }
+            tool_calls.append(tool_call)
+
         elif output.type in (
             "reasoning",
             "compaction",
