@@ -177,6 +177,7 @@ WellKnownTools = (
     "file_search",
     "web_search_preview",
     "web_search",
+    "computer",
     "computer_use_preview",
     "code_interpreter",
     "mcp",
