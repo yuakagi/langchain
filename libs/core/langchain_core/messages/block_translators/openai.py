@@ -203,6 +203,7 @@ def _convert_to_v1_from_chat_completions_input(
         for block in content
     ]
     for block in unpacked_blocks:
+        print("DEBUG:::::: BLOCK", block)
         if block.get("type") in {
             "image_url",
             "input_audio",
@@ -217,6 +218,20 @@ def _convert_to_v1_from_chat_completions_input(
                 converted_blocks.append(cast("types.ContentBlock", converted_block))
             else:
                 converted_blocks.append({"type": "non_standard", "value": block})
+
+
+        elif block.get("type") == "computer_call":
+            # Special handling for computer_call blocks, which may have been mistakenly
+            # left as non_standard due to their unique structure in OpenAI responses.
+            converted_blocks.append(
+                {
+                    "type": "tool_call",
+                    "name": "computer",
+                    "args": {"actions": block.get("actions", [])},
+                    "id": block.get("call_id"),
+                }
+            )
+
         elif block.get("type") in types.KNOWN_BLOCK_TYPES:
             converted_blocks.append(cast("types.ContentBlock", block))
         else:

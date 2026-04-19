@@ -4528,7 +4528,6 @@ def _construct_lc_result_from_responses_api(
             tool_calls.append(tool_call)
 
         elif output.type == "computer_call":
-            content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
             tool_call = {
                 "type": "tool_call",
                 "name": "computer",
