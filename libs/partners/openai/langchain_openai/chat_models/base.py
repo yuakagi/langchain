@@ -4461,6 +4461,7 @@ def _construct_lc_result_from_responses_api(
     invalid_tool_calls = []
     additional_kwargs: dict = {}
     for output in response.output:
+        print("DEBUG:::::: Processing output block:", output.type)
         if output.type == "message":
             phase = getattr(output, "phase", None)
             for content in output.content:
@@ -4535,13 +4536,14 @@ def _construct_lc_result_from_responses_api(
                 "id": output.call_id,
             }
             tool_calls.append(tool_call)
+            print("DEBUG:::::: Computer call output content blocks:", content_blocks)
 
         elif output.type in (
             "reasoning",
             "compaction",
             "web_search_call",
             "file_search_call",
-            "computer_call",
+            #"computer_call", <== Remove
             "code_interpreter_call",
             "mcp_call",
             "mcp_list_tools",
