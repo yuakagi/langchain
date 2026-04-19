@@ -1030,6 +1030,32 @@ def _convert_to_v1_from_responses(message: AIMessage) -> list[types.ContentBlock
                     tool_search_output["extras"] = extras_out
                 yield cast("types.ServerToolResult", tool_search_output)
 
+            elif block_type == "computer_call":
+                tool_call_block = {
+                    "type": "tool_call",
+                    "name": "computer",
+                    "args": {
+                        "actions": block.get("actions", []),
+                    },
+                    "id": block.get("call_id"),
+                }
+
+                if "id" in block:
+                    if "extras" not in tool_call_block:
+                        tool_call_block["extras"] = {}
+                    tool_call_block["extras"]["item_id"] = block["id"]
+
+                if "index" in block:
+                    tool_call_block["index"] = f"lc_cc_{block['index']}"
+
+                for extra_key in ("status",):
+                    if extra_key in block:
+                        if "extras" not in tool_call_block:
+                            tool_call_block["extras"] = {}
+                        tool_call_block["extras"][extra_key] = block[extra_key]
+
+                yield cast("types.ToolCall", tool_call_block)
+
             elif block_type in types.KNOWN_BLOCK_TYPES:
                 yield cast("types.ContentBlock", block)
             else:
