@@ -4247,14 +4247,18 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
         # Tool Messageをresponses APIの形式に変換の時、computer_call_outputの形式に調整してくれる。
         if msg["role"] == "tool":
             tool_output = msg["content"]
+            # Computr_callは無理やりtool_callにしてるので、responseをcomputer_call_outputの形式に変換してあげる必要がある。
             computer_call_output = _make_computer_call_output_from_message(
                 cast(ToolMessage, lc_msg)
             )
+            # custom_tool_callも同様に、custom_tool_call_outputの形式に変更してる。computer_useも基本的にこれに倣えばいい！
             custom_tool_output = _make_custom_tool_output_from_message(lc_msg)  # type: ignore[arg-type]
             if computer_call_output:
                 input_.append(computer_call_output)
             elif custom_tool_output:
                 input_.append(custom_tool_output)
+
+            # もしここまでに、computer_call_outputやcustom_tool_outputが見つかっていなければ、通常のtool_outputとして処理する!
             else:
                 tool_output = _ensure_valid_tool_message_content(tool_output)
                 function_call_output = {
@@ -4764,21 +4768,6 @@ def _convert_responses_chunk_to_generation_chunk(
             function_call_content["namespace"] = chunk.item.namespace
         content.append(function_call_content)
 
-    elif chunk.type == "response.output_item.done" and chunk.item.type == "computer_call":
-        _advance(chunk.output_index)
-        tool_output = chunk.item.model_dump(exclude_none=True, mode="json")
-        tool_call_chunks.append(
-            {
-                "type": "tool_call_chunk",
-                "name": "computer",
-                "args": json.dumps({"actions": tool_output["actions"]}),
-                "id": chunk.item.call_id,
-                "index": current_index,
-            }
-        )
-
-        logger.warning("DEBUG:::::: Computer call output tool calls (done): %s", tool_call_chunks)
-
     elif chunk.type == "response.output_item.done" and chunk.item.type in (
         "compaction",
         "web_search_call",
@@ -4813,6 +4802,22 @@ def _convert_responses_chunk_to_generation_chunk(
                 "index": current_index,
             }
         )
+    elif chunk.type == "response.output_item.done" and chunk.item.type == "computer_call":
+        _advance(chunk.output_index)
+        tool_output = chunk.item.model_dump(exclude_none=True, mode="json")
+        tool_output["index"] = current_index
+        content.append(tool_output)
+        tool_call_chunks.append(
+            {
+                "type": "tool_call_chunk",
+                "name": "computer",
+                "args": json.dumps({"actions": tool_output["actions"]}),
+                "id": chunk.item.call_id,
+                "index": current_index,
+            }
+        )
+
+        logger.warning("DEBUG:::::: Computer call output tool calls (done): %s", tool_call_chunks)
     elif chunk.type == "response.function_call_arguments.delta":
         _advance(chunk.output_index)
         tool_call_chunks.append(
