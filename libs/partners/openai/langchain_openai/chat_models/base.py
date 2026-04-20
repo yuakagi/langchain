@@ -4528,6 +4528,7 @@ def _construct_lc_result_from_responses_api(
             tool_calls.append(tool_call)
 
         elif output.type == "computer_call":
+            content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
             tool_call = {
                 "type": "tool_call",
                 "name": "computer",
@@ -4535,7 +4536,8 @@ def _construct_lc_result_from_responses_api(
                 "id": output.call_id,
             }
             tool_calls.append(tool_call)
-            print("DEBUG:::::: Computer call output content blocks:", content_blocks)
+            print("DEBUG:::::: Computer call output tool calls:", tool_calls)
+            print("DEBUG:::::: Computer call output tool call:", tool_call)
 
         elif output.type in (
             "reasoning",
