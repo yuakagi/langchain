@@ -4461,7 +4461,7 @@ def _construct_lc_result_from_responses_api(
     invalid_tool_calls = []
     additional_kwargs: dict = {}
     for output in response.output:
-        logger.warning("DEBUG:::::: Processing output block:", output.type)
+        logger.warning("DEBUG:::::: Processing output block: %s", output.type)
         if output.type == "message":
             phase = getattr(output, "phase", None)
             for content in output.content:
@@ -4536,8 +4536,8 @@ def _construct_lc_result_from_responses_api(
                 "id": output.call_id,
             }
             tool_calls.append(tool_call)
-            logger.warning("DEBUG:::::: Computer call output tool calls:", tool_calls)
-            logger.warning("DEBUG:::::: Computer call output tool call:", tool_call)
+            logger.warning("DEBUG:::::: Computer call output tool calls: %s", tool_calls)
+            logger.warning("DEBUG:::::: Computer call output tool call: %s", tool_call)
 
         elif output.type in (
             "reasoning",
