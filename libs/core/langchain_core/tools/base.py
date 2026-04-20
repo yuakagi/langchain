@@ -79,6 +79,7 @@ TOOL_MESSAGE_BLOCK_TYPES = (
     "json",
     "search_result",
     "custom_tool_call_output",
+    "computer_call_output", # 追加した
     "document",
     "file",
 )

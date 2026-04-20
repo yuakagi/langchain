@@ -4147,6 +4147,10 @@ def _make_computer_call_output_from_message(
                 and isinstance(block, dict)
                 and block.get("type") == "input_image"
             ):
+                # OpenAI's computer_tool_output expects {"image_url": "..."}, not {"image_url":{"url": "..."}}
+                image_url = block.get("image_url")
+                if isinstance(image_url, dict) and "url" in image_url:
+                    block["image_url"] = image_url["url"]
                 # Use first input_image block
                 computer_call_output = {
                     "call_id": message.tool_call_id,
@@ -4357,7 +4361,7 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                 content_call_ids = {
                     block["call_id"]
                     for block in input_
-                    if block.get("type") in ("function_call", "custom_tool_call")
+                    if block.get("type") in ("function_call", "custom_tool_call", "computer_call") # Computer_call　追加
                     and "call_id" in block
                 }
                 for tool_call in tool_calls:
@@ -4532,17 +4536,17 @@ def _construct_lc_result_from_responses_api(
             }
             tool_calls.append(tool_call)
 
-        #elif output.type == "computer_call":
-        #    content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
-        #    tool_call = {
-        #        "type": "tool_call",
-        #        "name": "computer",
-        #        "args": {"actions": output.actions},
-        #        "id": output.call_id,
-        #    }
-        #    tool_calls.append(tool_call)
-        #    logger.warning("DEBUG:::::: Computer call output tool calls: %s", tool_calls)
-        #    logger.warning("DEBUG:::::: Computer call output tool call: %s", tool_call)
+        elif output.type == "computer_call":
+            content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
+            tool_call = {
+                "type": "tool_call",
+                "name": "computer",
+                "args": {"actions": output.actions},
+                "id": output.call_id,
+            }
+            tool_calls.append(tool_call)
+            logger.warning("DEBUG:::::: Computer call output tool calls: %s", tool_calls)
+            logger.warning("DEBUG:::::: Computer call output tool call: %s", tool_call)
 
         elif output.type in (
             "reasoning",
@@ -4802,6 +4806,7 @@ def _convert_responses_chunk_to_generation_chunk(
                 "index": current_index,
             }
         )
+    # ここでcomputer_callのdoneイベントをキャッチして、tool_callsに追加する。これで、computer_callも通常のtool_callと同様に扱えるようになる。
     elif chunk.type == "response.output_item.done" and chunk.item.type == "computer_call":
         _advance(chunk.output_index)
         tool_output = chunk.item.model_dump(exclude_none=True, mode="json")
