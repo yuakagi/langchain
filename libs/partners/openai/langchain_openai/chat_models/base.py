@@ -4776,17 +4776,6 @@ def _convert_responses_chunk_to_generation_chunk(
                 "index": current_index,
             }
         )
-        function_call_content: dict = {
-            "type": "function_call",
-            "name": "computer",
-            "arguments": json.dumps({"actions": tool_output["actions"]}),
-            "call_id": chunk.item.call_id,
-            "id": chunk.item.id,
-            "index": current_index,
-        }
-        if getattr(chunk.item, "namespace", None) is not None:
-            function_call_content["namespace"] = chunk.item.namespace
-        content.append(function_call_content)
 
         logger.warning("DEBUG:::::: Computer call output tool calls (done): %s", tool_call_chunks)
 
