@@ -4769,7 +4769,7 @@ def _convert_responses_chunk_to_generation_chunk(
             {
                 "type": "tool_call_chunk",
                 "name": "computer",
-                "args": json.dumps({"actions": chunk.item.actions}),
+                "args": {"actions": chunk.item.actions},
                 "id": chunk.item.call_id,
                 "index": current_index,
             }
@@ -4777,7 +4777,7 @@ def _convert_responses_chunk_to_generation_chunk(
         function_call_content: dict = {
             "type": "function_call",
             "name": "computer",
-            "arguments": json.dumps({"actions": chunk.item.actions}),
+            "arguments": {"actions": chunk.item.actions},
             "call_id": chunk.item.call_id,
             "id": chunk.item.id,
             "index": current_index,
