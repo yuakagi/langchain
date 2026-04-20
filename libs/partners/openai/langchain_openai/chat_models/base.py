@@ -4765,11 +4765,12 @@ def _convert_responses_chunk_to_generation_chunk(
 
     elif chunk.type == "response.output_item.done" and chunk.item.type == "computer_call":
         _advance(chunk.output_index)
+        tool_output = chunk.item.model_dump(exclude_none=True, mode="json")
         tool_call_chunks.append(
             {
                 "type": "tool_call_chunk",
                 "name": "computer",
-                "args": {"actions": chunk.item.actions},
+                "args": json.dumps({"actions": tool_output["actions"]}),
                 "id": chunk.item.call_id,
                 "index": current_index,
             }
@@ -4777,7 +4778,7 @@ def _convert_responses_chunk_to_generation_chunk(
         function_call_content: dict = {
             "type": "function_call",
             "name": "computer",
-            "arguments": {"actions": chunk.item.actions},
+            "arguments": json.dumps({"actions": tool_output["actions"]}),
             "call_id": chunk.item.call_id,
             "id": chunk.item.id,
             "index": current_index,
