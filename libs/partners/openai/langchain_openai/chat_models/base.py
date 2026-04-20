@@ -4532,24 +4532,24 @@ def _construct_lc_result_from_responses_api(
             }
             tool_calls.append(tool_call)
 
-        elif output.type == "computer_call":
-            content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
-            tool_call = {
-                "type": "tool_call",
-                "name": "computer",
-                "args": {"actions": output.actions},
-                "id": output.call_id,
-            }
-            tool_calls.append(tool_call)
-            logger.warning("DEBUG:::::: Computer call output tool calls: %s", tool_calls)
-            logger.warning("DEBUG:::::: Computer call output tool call: %s", tool_call)
+        #elif output.type == "computer_call":
+        #    content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
+        #    tool_call = {
+        #        "type": "tool_call",
+        #        "name": "computer",
+        #        "args": {"actions": output.actions},
+        #        "id": output.call_id,
+        #    }
+        #    tool_calls.append(tool_call)
+        #    logger.warning("DEBUG:::::: Computer call output tool calls: %s", tool_calls)
+        #    logger.warning("DEBUG:::::: Computer call output tool call: %s", tool_call)
 
         elif output.type in (
             "reasoning",
             "compaction",
             "web_search_call",
             "file_search_call",
-            #"computer_call", <== Remove
+            "computer_call",
             "code_interpreter_call",
             "mcp_call",
             "mcp_list_tools",
