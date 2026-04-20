@@ -4244,6 +4244,7 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
         # "name" parameter unsupported
         if "name" in msg:
             msg.pop("name")
+        # Tool Messageをresponses APIの形式に変換の時、computer_call_outputの形式に調整してくれる。
         if msg["role"] == "tool":
             tool_output = msg["content"]
             computer_call_output = _make_computer_call_output_from_message(
@@ -4390,6 +4391,7 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
         else:
             input_.append(msg)
 
+    logger.warning("DEBUG:::::: Constructed Responses API input: %s", input_)
     return input_
 
 
@@ -4461,7 +4463,6 @@ def _construct_lc_result_from_responses_api(
     invalid_tool_calls = []
     additional_kwargs: dict = {}
     for output in response.output:
-        logger.warning("DEBUG:::::: Processing output block: %s", output.type)
         if output.type == "message":
             phase = getattr(output, "phase", None)
             for content in output.content:
