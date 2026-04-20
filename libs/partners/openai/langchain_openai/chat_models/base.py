@@ -4765,20 +4765,28 @@ def _convert_responses_chunk_to_generation_chunk(
 
     elif chunk.type == "response.output_item.done" and chunk.item.type == "computer_call":
         _advance(chunk.output_index)
-
-        # contentには computer_call として追加
-        tool_output = chunk.item.model_dump(exclude_none=True, mode="json")
-        tool_output["index"] = current_index
-        content.append(tool_output)
-
-        # ★ tool_call_chunks にも追加（これが重要！）
-        tool_call_chunks.append({
-            "type": "tool_call_chunk",
+        tool_call_chunks.append(
+            {
+                "type": "tool_call_chunk",
+                "name": "computer",
+                "args": json.dumps({"actions": chunk.item.actions}),
+                "id": chunk.item.call_id,
+                "index": current_index,
+            }
+        )
+        function_call_content: dict = {
+            "type": "function_call",
             "name": "computer",
-            "args": json.dumps({"actions": chunk.item.actions}),
-            "id": chunk.item.call_id,
+            "arguments": json.dumps({"actions": chunk.item.actions}),
+            "call_id": chunk.item.call_id,
+            "id": chunk.item.id,
             "index": current_index,
-        })
+        }
+        if getattr(chunk.item, "namespace", None) is not None:
+            function_call_content["namespace"] = chunk.item.namespace
+        content.append(function_call_content)
+
+        logger.warning("DEBUG:::::: Computer call output tool calls (done): %s", tool_call_chunks)
 
     elif chunk.type == "response.output_item.done" and chunk.item.type in (
         "compaction",
