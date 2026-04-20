@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import json
 import warnings
 from typing import TYPE_CHECKING, Any, Literal, cast
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from langchain_core.language_models._utils import (
     _parse_data_uri,
@@ -203,7 +207,7 @@ def _convert_to_v1_from_chat_completions_input(
         for block in content
     ]
     for block in unpacked_blocks:
-        print("DEBUG:::::: BLOCK", block)
+        logger.warning("DEBUG:::::: BLOCK", block)
         if block.get("type") in {
             "image_url",
             "input_audio",
