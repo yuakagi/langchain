@@ -4762,11 +4762,29 @@ def _convert_responses_chunk_to_generation_chunk(
         if getattr(chunk.item, "namespace", None) is not None:
             function_call_content["namespace"] = chunk.item.namespace
         content.append(function_call_content)
+
+    elif chunk.type == "response.output_item.done" and chunk.item.type == "computer_call":
+        _advance(chunk.output_index)
+
+        # contentには computer_call として追加
+        tool_output = chunk.item.model_dump(exclude_none=True, mode="json")
+        tool_output["index"] = current_index
+        content.append(tool_output)
+
+        # ★ tool_call_chunks にも追加（これが重要！）
+        tool_call_chunks.append({
+            "type": "tool_call_chunk",
+            "name": "computer",
+            "args": json.dumps({"actions": chunk.item.actions}),
+            "id": chunk.item.call_id,
+            "index": current_index,
+        })
+
     elif chunk.type == "response.output_item.done" and chunk.item.type in (
         "compaction",
         "web_search_call",
         "file_search_call",
-        "computer_call",
+        #"computer_call",
         "code_interpreter_call",
         "mcp_call",
         "mcp_list_tools",
