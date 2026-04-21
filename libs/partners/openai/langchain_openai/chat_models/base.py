@@ -17,9 +17,11 @@ import base64
 import json
 import logging
 import os
+from pkgutil import extend_path
 import re
 import ssl
 import sys
+from tkinter import NO
 import warnings
 from collections.abc import (
     AsyncIterator,
@@ -4142,29 +4144,14 @@ def _make_computer_call_output_from_message(
     message: ToolMessage,
 ) -> dict[str, Any] | None:
     computer_call_output: dict[str, Any] | None = None
-    logger.warning("===========================================================")
-    logger.warning("DEBUG::: Making computer call output from message: %s", message)
-    logger.warning("===========================================================")
     if isinstance(message.content, list):
         for block in message.content:
-            logger.warning("DEBUG::: Inspecting block: %s", block)
-            logger.warning("DEBUG::: Block type: %s", block.get("type") if isinstance(block, dict) else "N/A")
-            logger.warning("DEBUG::: Message additional_kwargs: %s", message.additional_kwargs)
 
             if (
-                # この辺追加してる
-                # ToolMessageのadditional_kwargsにtypeがcomputer_call_outputがついてるとき....
-                # 整形処理が入る
-                # TODO: additional_kwargsを加える処理は、langchain側に組み込んだ方がいいかもしれない。
                 message.additional_kwargs.get("type") == "computer_call_output"
                 and isinstance(block, dict)
                 and block.get("type") == "input_image"
             ):
-
-                # OpenAI's computer_tool_output expects {"image_url": "..."}, not {"image_url":{"url": "..."}}
-                #image_url = block.get("image_url")
-                #if isinstance(image_url, dict) and "url" in image_url:
-                #    block["image_url"] = image_url["url"]
                 # Use first input_image block
                 computer_call_output = {
                     "call_id": message.tool_call_id,
@@ -4186,6 +4173,7 @@ def _make_computer_call_output_from_message(
             "type": "computer_call_output",
             "output": {"type": "input_image", "image_url": message.content},
         }
+
     if (
         computer_call_output is not None
         and "acknowledged_safety_checks" in message.additional_kwargs
@@ -4235,24 +4223,11 @@ def _pop_index_and_sub_index(block: dict) -> dict:
 def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
     """Construct the input for the OpenAI Responses API."""
     input_ = []
-    # _convert_message_to_dictが、image_urlなどの形式処理を含んでいる....
-    # これは、呼ばれてること確定。これによってToolMessageのimage_url{"url":...}が整形される..はず
-
-    logger.warning("===========================================================")
-    logger.warning("DEBUG::: Original messages before conversion for Responses API:")
-    for m in messages:
-        logger.warning("––– message ---")
-        logger.warning(m)
-    logger.warning("===========================================================")
 
     for lc_msg in messages:
         if isinstance(lc_msg, AIMessage):
             lc_msg = _convert_from_v03_ai_message(lc_msg)
             msg = _convert_message_to_dict(lc_msg, api="responses")
-            logger.warning("===========================================================")
-            logger.warning("DEBUG (AIMessage)::: Converted AIMessage for Responses API: %s", lc_msg)
-            logger.warning("DEBUG::: Converted message dict for Responses API: %s", msg)
-            logger.warning("===========================================================")
             if isinstance(msg.get("content"), list) and all(
                 isinstance(block, dict) for block in msg["content"]
             ):
@@ -4267,12 +4242,7 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                 ]
                 msg["content"] = _convert_from_v1_to_responses(msg["content"], tcs)
         else:
-            # ここでtoolMessageなどに対しrole="tool"が付与されるなど、最小限処置するが、大きく手は加えてない。
             msg = _convert_message_to_dict(lc_msg, api="responses")
-            logger.warning("===========================================================")
-            logger.warning("DEBUG (ToolMessage, etc)::: Converted AIMessage for Responses API: %s", lc_msg)
-            logger.warning("DEBUG::: Converted message dict for Responses API: %s", msg)
-            logger.warning("===========================================================")
             # ‼️ここで, toolMessageのcontent(image)が、次のようにしっかり変換されてる！
              # ”'content': [{'type': 'input_image', 'image_url': 'data:image/png;base64,iVBOR
             # なので、これ以下でmsgに含まれるcontentは、ちゃんとimage_urlの形式に変換されてるはずである!!!!!!!!!
@@ -4290,36 +4260,41 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
         if "name" in msg:
             msg.pop("name")
 
-        # !!! ToolMessageの処理のようである
-        # Tool Messageをresponses APIの形式に変換の時、computer_call_outputの形式に調整してくれる。
-        # ToolMessageが、content(list)の中に、複数内容を持ってる場合あるが、ちゃんとなぜか、分けられてconstructed responseの中に入ってる....
-        # どういうことだ
-        # _convert_message_to_dictのなかで、contentはlistを想定しiterationしてるので、複数処理できる前提
         if msg["role"] == "tool":
-            # ここにToolMessageが入ってくる....
+            tool_output = msg["content"]
 
-            # tool_outputはlist of dictsが想定される様子 (またはstr)
-            tool_output = msg["content"] # <= これがtoolMessage.contentだろう（通常list of dicts)
-
-            # Computr_callは無理やりtool_callにしてるので、responseをcomputer_call_outputの形式に変換してあげる必要がある。
             computer_call_output = _make_computer_call_output_from_message(
-                cast(ToolMessage, lc_msg)
+                cast(ToolMessage, lc_msg) # コメント: <= lc_msgであり、msgじゃないので注意
             )
-            # custom_tool_callも同様に、custom_tool_call_outputの形式に変更してる。computer_useも基本的にこれに倣えばいい！
             custom_tool_output = _make_custom_tool_output_from_message(lc_msg)  # type: ignore[arg-type]
 
-
-            # 以下、どれかの処理しか進まない(computer_call_output > custom_tool_output > 汎用のfunction_call_outputの順で優先して処理される。重複はない。)
             if computer_call_output:
                 input_.append(computer_call_output)
             elif custom_tool_output:
                 input_.append(custom_tool_output)
-            # もしここまでに、computer_call_outputやcustom_tool_outputが見つかっていなければ、通常のtool_outputとして処理する!
+
+            # 追加！重要 (既存の_make_computer_call_output_from_messageをバイパスして、ここでcleaningされたoutputを含むcomputer_call_outputに追加する処理を入れる)
+            # 既存の_make_computer_call_output_from_messageは、lc_msgを直接使うため、openAI形式に変換されてないinputがそのまま使われてしまう。
+            elif lc_msg.additional_kwargs.get("type") == "computer_call_output":
+                # もしcomputer_call_outputがcontentの中に見つからなくても、additional_kwargsにtype="computer_call_output"があれば、そちらを優先してcomputer_call_outputとして処理する。
+                computer_call_output = {
+                    "type": "computer_call_output",
+                    "output": tool_output,
+                    "call_id": lc_msg.tool_call_id,
+                }
+                # "detail": "original"など、追加されたパラメーターをここで追加する場所はここが適切(lc_msgにextraに配分されてる)
+                extra_computer_call_output = lc_msg.get("extra", None)
+                if extra_computer_call_output is not None:
+                    computer_call_output.update(extra_computer_call_output)
+
+                # acknowledged_safety_checksを、既存処置に矛盾内容加える。
+                if "acknowledged_safety_checks" in lc_msg.additional_kwargs:
+                    computer_call_output["acknowledged_safety_checks"] = lc_msg.additional_kwargs[
+                        "acknowledged_safety_checks"
+                    ]
+                input_.append(computer_call_output)
+
             else:
-                # ToolMessageに一緒に含めたtextの方は、こちらで適切に処理されてるようである。
-                # なぜ複数contentあるのに、,,imageの方はそのまま???
-                # ここまできてしまうが、それでもtype="input_image"などにしっかり整形はされてる。ここにくる前に、contentの中身は、output
-                # に適切になるよう、openai形式にimageも整形されるようである。
                 tool_output = _ensure_valid_tool_message_content(tool_output)
                 function_call_output = {
                     "type": "function_call_output",
@@ -4603,8 +4578,6 @@ def _construct_lc_result_from_responses_api(
                 "id": output.call_id,
             }
             tool_calls.append(tool_call)
-            logger.warning("DEBUG:::::: Computer call output tool calls: %s", tool_calls)
-            logger.warning("DEBUG:::::: Computer call output tool call: %s", tool_call)
 
         elif output.type in (
             "reasoning",
@@ -4864,7 +4837,7 @@ def _convert_responses_chunk_to_generation_chunk(
                 "index": current_index,
             }
         )
-    # ここでcomputer_callのdoneイベントをキャッチして、tool_callsに追加する。これで、computer_callも通常のtool_callと同様に扱えるようになる。
+    # 追加: ここでcomputer_callのdoneイベントをキャッチして、tool_callsに追加する。これで、computer_callも通常のtool_callと同様に扱えるようになる。
     elif chunk.type == "response.output_item.done" and chunk.item.type == "computer_call":
         _advance(chunk.output_index)
         tool_output = chunk.item.model_dump(exclude_none=True, mode="json")
@@ -4881,6 +4854,7 @@ def _convert_responses_chunk_to_generation_chunk(
         )
 
         logger.warning("DEBUG:::::: Computer call output tool calls (done): %s", tool_call_chunks)
+
     elif chunk.type == "response.function_call_arguments.delta":
         _advance(chunk.output_index)
         tool_call_chunks.append(

@@ -82,7 +82,6 @@ from langchain_openai.chat_models.base import (
     _resize,
 )
 
-
 def test_openai_model_param() -> None:
     llm = ChatOpenAI(model="foo")
     assert llm.model_name == "foo"

@@ -469,6 +469,8 @@ def test_route_from_model_kwargs() -> None:
     _ = next(llm.stream("Hello"))
 
 
+# 追加: これを、アップデートする必要がありそうだ。
+# computer-use-previewは事実上deprecatedであるため、既存logicは変更、または上書きでいいだろう。
 @pytest.mark.flaky(retries=3, delay=1)
 def test_computer_calls() -> None:
     llm = ChatOpenAI(model="gpt-5.4")
