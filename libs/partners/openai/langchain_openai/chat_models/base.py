@@ -32,7 +32,7 @@ from collections.abc import (
 from functools import partial
 from io import BytesIO
 from json import JSONDecodeError
-from math import ceil
+from math import ceil, log
 from operator import itemgetter
 from typing import (
     TYPE_CHECKING,
@@ -4143,14 +4143,18 @@ def _make_computer_call_output_from_message(
     if isinstance(message.content, list):
         for block in message.content:
             if (
+                # この辺追加してる
+                # ToolMessageのadditional_kwargsにtypeがcomputer_call_outputがついてるとき....
+                # 整形処理が入る
+                # TODO: additional_kwargsを加える処理は、langchain側に組み込んだ方がいいかもしれない。
                 message.additional_kwargs.get("type") == "computer_call_output"
                 and isinstance(block, dict)
                 and block.get("type") == "input_image"
             ):
                 # OpenAI's computer_tool_output expects {"image_url": "..."}, not {"image_url":{"url": "..."}}
-                image_url = block.get("image_url")
-                if isinstance(image_url, dict) and "url" in image_url:
-                    block["image_url"] = image_url["url"]
+                #image_url = block.get("image_url")
+                #if isinstance(image_url, dict) and "url" in image_url:
+                #    block["image_url"] = image_url["url"]
                 # Use first input_image block
                 computer_call_output = {
                     "call_id": message.tool_call_id,
@@ -4221,10 +4225,24 @@ def _pop_index_and_sub_index(block: dict) -> dict:
 def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
     """Construct the input for the OpenAI Responses API."""
     input_ = []
+    # _convert_message_to_dictが、image_urlなどの形式処理を含んでいる....
+    # これは、呼ばれてること確定。これによってToolMessageのimage_url{"url":...}が整形される..はず
+
+    logger.warning("===========================================================")
+    logger.warning("DEBUG::: Original messages before conversion for Responses API:")
+    for m in messages:
+        logger.warning("––– message ---")
+        logger.warning(m)
+    logger.warning("===========================================================")
+
     for lc_msg in messages:
         if isinstance(lc_msg, AIMessage):
             lc_msg = _convert_from_v03_ai_message(lc_msg)
             msg = _convert_message_to_dict(lc_msg, api="responses")
+            logger.warning("===========================================================")
+            logger.warning("DEBUG (AIMessage)::: Converted AIMessage for Responses API: %s", lc_msg)
+            logger.warning("DEBUG::: Converted message dict for Responses API: %s", msg)
+            logger.warning("===========================================================")
             if isinstance(msg.get("content"), list) and all(
                 isinstance(block, dict) for block in msg["content"]
             ):
@@ -4240,6 +4258,10 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                 msg["content"] = _convert_from_v1_to_responses(msg["content"], tcs)
         else:
             msg = _convert_message_to_dict(lc_msg, api="responses")
+            logger.warning("===========================================================")
+            logger.warning("DEBUG (ToolMessage, etc)::: Converted AIMessage for Responses API: %s", lc_msg)
+            logger.warning("DEBUG::: Converted message dict for Responses API: %s", msg)
+            logger.warning("===========================================================")
             # Get content from non-standard content blocks
             if isinstance(msg["content"], list):
                 for i, block in enumerate(msg["content"]):
@@ -4248,6 +4270,8 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
         # "name" parameter unsupported
         if "name" in msg:
             msg.pop("name")
+
+        # !!! ToolMessageの処理のようである
         # Tool Messageをresponses APIの形式に変換の時、computer_call_outputの形式に調整してくれる。
         if msg["role"] == "tool":
             tool_output = msg["content"]
@@ -4264,6 +4288,8 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
 
             # もしここまでに、computer_call_outputやcustom_tool_outputが見つかっていなければ、通常のtool_outputとして処理する!
             else:
+                # ToolMessageに一緒に含めたtextの方は、こちらで適切に処理されてるようである。
+                # なぜ複数contentあるのに、,,imageの方はそのまま???
                 tool_output = _ensure_valid_tool_message_content(tool_output)
                 function_call_output = {
                     "type": "function_call_output",
@@ -4271,6 +4297,7 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                     "call_id": msg["tool_call_id"],
                 }
                 input_.append(function_call_output)
+
         elif msg["role"] == "assistant":
             if isinstance(msg.get("content"), list):
                 for block in msg["content"]:
@@ -4526,6 +4553,7 @@ def _construct_lc_result_from_responses_api(
                 }
                 invalid_tool_calls.append(tool_call)
 
+        # 追加
         elif output.type == "custom_tool_call":
             content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
             tool_call = {
@@ -4553,7 +4581,7 @@ def _construct_lc_result_from_responses_api(
             "compaction",
             "web_search_call",
             "file_search_call",
-            "computer_call",
+            # "computer_call", 追加 (削除)
             "code_interpreter_call",
             "mcp_call",
             "mcp_list_tools",

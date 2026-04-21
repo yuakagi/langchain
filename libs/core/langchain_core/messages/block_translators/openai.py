@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import json
+from math import e
 import warnings
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -704,6 +705,48 @@ def _convert_to_v1_from_responses(message: AIMessage) -> list[types.ContentBlock
                 yield cast("types.ImageContentBlock", new_block)
 
             elif block_type == "function_call":
+                tool_call_block: (
+                    types.ToolCall | types.InvalidToolCall | types.ToolCallChunk | None
+                ) = None
+                call_id = block.get("call_id", "")
+
+                if (
+                    isinstance(message, AIMessageChunk)
+                    and len(message.tool_call_chunks) == 1
+                    and message.chunk_position != "last"
+                ):
+                    tool_call_block = message.tool_call_chunks[0].copy()  # type: ignore[assignment]
+                elif call_id:
+                    for tool_call in message.tool_calls or []:
+                        if tool_call.get("id") == call_id:
+                            tool_call_block = {
+                                "type": "tool_call",
+                                "name": tool_call["name"],
+                                "args": tool_call["args"],
+                                "id": tool_call.get("id"),
+                            }
+                            break
+                    else:
+                        for invalid_tool_call in message.invalid_tool_calls or []:
+                            if invalid_tool_call.get("id") == call_id:
+                                tool_call_block = invalid_tool_call.copy()
+                                break
+                if tool_call_block:
+                    if "id" in block:
+                        if "extras" not in tool_call_block:
+                            tool_call_block["extras"] = {}
+                        tool_call_block["extras"]["item_id"] = block["id"]
+                    if "index" in block:
+                        tool_call_block["index"] = f"lc_tc_{block['index']}"
+                    for extra_key in ("status", "namespace"):
+                        if extra_key in block:
+                            if "extras" not in tool_call_block:
+                                tool_call_block["extras"] = {}
+                            tool_call_block["extras"][extra_key] = block[extra_key]
+                    yield tool_call_block
+
+            # 追加
+            elif block_type == "computer_call":
                 tool_call_block: (
                     types.ToolCall | types.InvalidToolCall | types.ToolCallChunk | None
                 ) = None
