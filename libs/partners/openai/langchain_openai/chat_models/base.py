@@ -402,6 +402,8 @@ def _convert_message_to_dict(
         )
     elif isinstance(message, FunctionMessage):
         message_dict["role"] = "function"
+
+    # ここで、ToolMessageがまず、前処理される。..あまり大した処理はしてない
     elif isinstance(message, ToolMessage):
         message_dict["role"] = "tool"
         message_dict["tool_call_id"] = message.tool_call_id
@@ -4140,8 +4142,15 @@ def _make_computer_call_output_from_message(
     message: ToolMessage,
 ) -> dict[str, Any] | None:
     computer_call_output: dict[str, Any] | None = None
+    logger.warning("===========================================================")
+    logger.warning("DEBUG::: Making computer call output from message: %s", message)
+    logger.warning("===========================================================")
     if isinstance(message.content, list):
         for block in message.content:
+            logger.warning("DEBUG::: Inspecting block: %s", block)
+            logger.warning("DEBUG::: Block type: %s", block.get("type") if isinstance(block, dict) else "N/A")
+            logger.warning("DEBUG::: Message additional_kwargs: %s", message.additional_kwargs)
+
             if (
                 # この辺追加してる
                 # ToolMessageのadditional_kwargsにtypeがcomputer_call_outputがついてるとき....
@@ -4151,6 +4160,7 @@ def _make_computer_call_output_from_message(
                 and isinstance(block, dict)
                 and block.get("type") == "input_image"
             ):
+
                 # OpenAI's computer_tool_output expects {"image_url": "..."}, not {"image_url":{"url": "..."}}
                 #image_url = block.get("image_url")
                 #if isinstance(image_url, dict) and "url" in image_url:
@@ -4257,39 +4267,59 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                 ]
                 msg["content"] = _convert_from_v1_to_responses(msg["content"], tcs)
         else:
+            # ここでtoolMessageなどに対しrole="tool"が付与されるなど、最小限処置するが、大きく手は加えてない。
             msg = _convert_message_to_dict(lc_msg, api="responses")
             logger.warning("===========================================================")
             logger.warning("DEBUG (ToolMessage, etc)::: Converted AIMessage for Responses API: %s", lc_msg)
             logger.warning("DEBUG::: Converted message dict for Responses API: %s", msg)
             logger.warning("===========================================================")
+            # ‼️ここで, toolMessageのcontent(image)が、次のようにしっかり変換されてる！
+             # ”'content': [{'type': 'input_image', 'image_url': 'data:image/png;base64,iVBOR
+            # なので、これ以下でmsgに含まれるcontentは、ちゃんとimage_urlの形式に変換されてるはずである!!!!!!!!!
+            #!!ちなみに、'detail': 'original'は、変換前の状態(lc_msg)の時点ですでに'extras': {'detail': 'original'}というふうに
+            # 分別されてる！が、`msg`になって消滅してる....
+
+
             # Get content from non-standard content blocks
             if isinstance(msg["content"], list):
                 for i, block in enumerate(msg["content"]):
                     if isinstance(block, dict) and block.get("type") == "non_standard":
                         msg["content"][i] = block["value"]
+
         # "name" parameter unsupported
         if "name" in msg:
             msg.pop("name")
 
         # !!! ToolMessageの処理のようである
         # Tool Messageをresponses APIの形式に変換の時、computer_call_outputの形式に調整してくれる。
+        # ToolMessageが、content(list)の中に、複数内容を持ってる場合あるが、ちゃんとなぜか、分けられてconstructed responseの中に入ってる....
+        # どういうことだ
+        # _convert_message_to_dictのなかで、contentはlistを想定しiterationしてるので、複数処理できる前提
         if msg["role"] == "tool":
-            tool_output = msg["content"]
+            # ここにToolMessageが入ってくる....
+
+            # tool_outputはlist of dictsが想定される様子 (またはstr)
+            tool_output = msg["content"] # <= これがtoolMessage.contentだろう（通常list of dicts)
+
             # Computr_callは無理やりtool_callにしてるので、responseをcomputer_call_outputの形式に変換してあげる必要がある。
             computer_call_output = _make_computer_call_output_from_message(
                 cast(ToolMessage, lc_msg)
             )
             # custom_tool_callも同様に、custom_tool_call_outputの形式に変更してる。computer_useも基本的にこれに倣えばいい！
             custom_tool_output = _make_custom_tool_output_from_message(lc_msg)  # type: ignore[arg-type]
+
+
+            # 以下、どれかの処理しか進まない(computer_call_output > custom_tool_output > 汎用のfunction_call_outputの順で優先して処理される。重複はない。)
             if computer_call_output:
                 input_.append(computer_call_output)
             elif custom_tool_output:
                 input_.append(custom_tool_output)
-
             # もしここまでに、computer_call_outputやcustom_tool_outputが見つかっていなければ、通常のtool_outputとして処理する!
             else:
                 # ToolMessageに一緒に含めたtextの方は、こちらで適切に処理されてるようである。
                 # なぜ複数contentあるのに、,,imageの方はそのまま???
+                # ここまできてしまうが、それでもtype="input_image"などにしっかり整形はされてる。ここにくる前に、contentの中身は、output
+                # に適切になるよう、openai形式にimageも整形されるようである。
                 tool_output = _ensure_valid_tool_message_content(tool_output)
                 function_call_output = {
                     "type": "function_call_output",
