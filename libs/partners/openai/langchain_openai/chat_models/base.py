@@ -21,7 +21,6 @@ from pkgutil import extend_path
 import re
 import ssl
 import sys
-from tkinter import NO
 import warnings
 from collections.abc import (
     AsyncIterator,
