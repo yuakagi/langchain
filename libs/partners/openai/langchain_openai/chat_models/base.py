@@ -4282,7 +4282,7 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                     "call_id": lc_msg.tool_call_id,
                 }
                 # "detail": "original"など、追加されたパラメーターをここで追加する場所はここが適切(lc_msgにextraに配分されてる)
-                extra_computer_call_output = lc_msg.get("extra", None)
+                extra_computer_call_output = getattr(lc_msg, "extra", None)
                 if extra_computer_call_output is not None:
                     computer_call_output.update(extra_computer_call_output)
 
