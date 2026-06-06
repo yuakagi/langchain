@@ -4243,33 +4243,6 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
             # 既存の_make_computer_call_output_from_messageは、lc_msgを直接使うため、openAI形式に変換されてないinputがそのまま使われてしまう。
             elif lc_msg.additional_kwargs.get("type") == "computer_call_output":
 
-                print("=============================================================")
-                print("DEBUG:::::: lc_msg: ")
-                print(lc_msg)
-                print("=============================================================")
-
-                print("=============================================================")
-                print("DEBUG:::::: lc_msg.extras: ")
-                print(lc_msg.get("extras") or {})
-                print("=============================================================")
-
-                print("=============================================================")
-                print("DEBUG:::::: lc_msg.content: ")
-                print(lc_msg.content)
-                print("=============================================================")
-
-
-                print("=============================================================")
-                print("DEBUG:::::: msg: ")
-                print(msg)
-                print("=============================================================")
-
-                print("=============================================================")
-                print("DEBUG:::::: msg.extras: ")
-                print(msg.get("extras") or {})
-                print("=============================================================")
-
-
                 if len(tool_output) == 0:
                     computer_call_output_content = {}
 
@@ -4284,7 +4257,7 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                     computer_call_output_content = tool_output[0]
 
                     # Try to set 'detail' field for computer_call_output from extras
-                    extras = lc_msg["content"][0].get("extras") if isinstance(lc_msg["content"], list) else None
+                    extras = lc_msg.content[0].get("extras") if isinstance(lc_msg.content, list) else None
                     if extras:
                         if "detail" in extras:
                             computer_call_output_content["detail"] = extras["detail"]
