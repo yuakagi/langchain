@@ -4567,7 +4567,7 @@ def _construct_lc_result_from_responses_api(
             content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
             tool_call = {
                 "type": "tool_call",
-                "name": "computer",
+                "name": "computer_call",
                 "args": {"actions": output.actions},
                 "id": output.call_id,
             }
@@ -4842,7 +4842,7 @@ def _convert_responses_chunk_to_generation_chunk(
         tool_call_chunks.append(
             {
                 "type": "tool_call_chunk",
-                "name": "computer",
+                "name": "computer_call",
                 "args": json.dumps({"actions": tool_output["actions"]}),
                 "id": chunk.item.call_id,
                 "index": current_index,
