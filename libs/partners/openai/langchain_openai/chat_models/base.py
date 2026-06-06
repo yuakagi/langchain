@@ -4275,6 +4275,13 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                     if detail:
                         output["detail"] = detail
 
+                print("=============================================================")
+                print("DEBUG:::::: details: ")
+                print(lc_msg.additional_kwargs.get("detail"))
+                print("DEBUG:::::: details from response_metadata: ")
+                print(lc_msg.response_metadata.get("detail"))
+                print("=============================================================")
+
                 computer_call_output = {
                     "type": "computer_call_output",
                     "call_id": lc_msg.tool_call_id,
