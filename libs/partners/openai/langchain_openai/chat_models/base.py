@@ -4248,10 +4248,25 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                 print(lc_msg)
                 print("=============================================================")
 
+                print("=============================================================")
+                print("DEBUG:::::: lc_msg.extras: ")
+                print(lc_msg.get("extras") or {})
+                print("=============================================================")
+
+                print("=============================================================")
+                print("DEBUG:::::: lc_msg.content: ")
+                print(lc_msg.content)
+                print("=============================================================")
+
 
                 print("=============================================================")
                 print("DEBUG:::::: msg: ")
                 print(msg)
+                print("=============================================================")
+
+                print("=============================================================")
+                print("DEBUG:::::: msg.extras: ")
+                print(msg.get("extras") or {})
                 print("=============================================================")
 
                 if isinstance(tool_output, list):
@@ -4281,7 +4296,7 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
 
                 if "detail" not in output:
                     # Try to find "detail" from extras
-                    extras = lc_msg.additional_kwargs.get("extras") or {}
+                    extras = lc_msg.get("extras") or {}
                     detail = extras.get("detail")
                     if detail:
                         output["detail"] = detail
