@@ -4139,48 +4139,10 @@ def _ensure_valid_tool_message_content(tool_output: Any) -> str | list[dict]:
     return _stringify(tool_output)
 
 
-def _make_computer_call_output_from_message(
-    message: ToolMessage,
-) -> dict[str, Any] | None:
-    computer_call_output: dict[str, Any] | None = None
-    if isinstance(message.content, list):
-        for block in message.content:
-
-            if (
-                message.additional_kwargs.get("type") == "computer_call_output"
-                and isinstance(block, dict)
-                and block.get("type") == "input_image"
-            ):
-                # Use first input_image block
-                computer_call_output = {
-                    "call_id": message.tool_call_id,
-                    "type": "computer_call_output",
-                    "output": block,
-                }
-                break
-            if (
-                isinstance(block, dict)
-                and block.get("type") == "non_standard"
-                and block.get("value", {}).get("type") == "computer_call_output"
-            ):
-                computer_call_output = block["value"]
-                break
-    elif message.additional_kwargs.get("type") == "computer_call_output":
-        # string, assume image_url
-        computer_call_output = {
-            "call_id": message.tool_call_id,
-            "type": "computer_call_output",
-            "output": {"type": "input_image", "image_url": message.content},
-        }
-
-    if (
-        computer_call_output is not None
-        and "acknowledged_safety_checks" in message.additional_kwargs
-    ):
-        computer_call_output["acknowledged_safety_checks"] = message.additional_kwargs[
-            "acknowledged_safety_checks"
-        ]
-    return computer_call_output
+# 追加: 7/23をもってcomputer-use-previewはdeprecatedなので、これを維持する必要なし。この関数ごと編集(previewの機能を、gpt-5.4以降の機能に上書きしていく)
+# 削除 def _make_computer_call_output_from_message(
+# 削除     message: ToolMessage,
+# 削除 ) -> dict[str, Any] | None:
 
 
 def _make_custom_tool_output_from_message(message: ToolMessage) -> dict | None:
@@ -4262,36 +4224,65 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
         if msg["role"] == "tool":
             tool_output = msg["content"]
 
-            computer_call_output = _make_computer_call_output_from_message(
-                cast(ToolMessage, lc_msg) # コメント: <= lc_msgであり、msgじゃないので注意
-            )
-            custom_tool_output = _make_custom_tool_output_from_message(lc_msg)  # type: ignore[arg-type]
+            #削除 computer_call_output = _make_computer_call_output_from_message(cast(ToolMessage, lc_msg) # コメント: <= lc_msgであり、msgじゃないので注意)
 
-            if computer_call_output:
-                input_.append(computer_call_output)
-            elif custom_tool_output:
+
+            #削除if computer_call_output:
+            #削除    input_.append(computer_call_output)
+
+            #削除elif custom_tool_output:
+
+            custom_tool_output = _make_custom_tool_output_from_message(lc_msg)  # type: ignore[arg-type]
+            if custom_tool_output:
                 input_.append(custom_tool_output)
 
+
+            # ====== Computer call outputを処理するロジック追加 ======
             # 追加！重要 (既存の_make_computer_call_output_from_messageをバイパスして、ここでcleaningされたoutputを含むcomputer_call_outputに追加する処理を入れる)
             # 既存の_make_computer_call_output_from_messageは、lc_msgを直接使うため、openAI形式に変換されてないinputがそのまま使われてしまう。
             elif lc_msg.additional_kwargs.get("type") == "computer_call_output":
-                # もしcomputer_call_outputがcontentの中に見つからなくても、additional_kwargsにtype="computer_call_output"があれば、そちらを優先してcomputer_call_outputとして処理する。
+
+                if isinstance(tool_output, list):
+                    if len(tool_output) != 1:
+                        raise ValueError(
+                            "Expected exactly one content block for computer_call_output, "
+                            f"but got {len(tool_output)}: {tool_output}"
+                        )
+                    tool_output = tool_output[0]
+
+                if not (isinstance(tool_output, dict) and tool_output.get("type") in ["input_image", "computer_screenshot"]):
+                    raise ValueError(
+                        "Expected content block of type 'input_image' or 'computer_screenshot' for computer_call_output, "
+                        f"but got: {tool_output}"
+                    )
+
+                # Ensure tool_output type is `computer_screenshot`
+                if "type" in tool_output and tool_output["type"] == "input_image":
+                    tool_output["type"] = "computer_screenshot"
+
+                print("================== Debug: Constructing computer_call_output with tool_output =================")  # noqa: E501
+                print(f"Original tool_output: {tool_output}")  # noqa: E501
+                print(f"Additional kwargs: {lc_msg.additional_kwargs}")  # noqa: E501
+                print("==============================================================================================")  # noqa: E501
+
+                # construct computer_call_output
                 computer_call_output = {
                     "type": "computer_call_output",
-                    "output": tool_output,
                     "call_id": lc_msg.tool_call_id,
+                    "output": tool_output,
                 }
                 # "detail": "original"など、追加されたパラメーターをここで追加する場所はここが適切(lc_msgにextraに配分されてる)
                 extra_computer_call_output = getattr(lc_msg, "extra", None)
                 if extra_computer_call_output is not None:
-                    computer_call_output.update(extra_computer_call_output)
+                    computer_call_output["output"].update(extra_computer_call_output)
 
-                # acknowledged_safety_checksを、既存処置に矛盾内容加える。
+                # acknowledged_safety_checksを、既存処置に矛盾ないよう加える。
                 if "acknowledged_safety_checks" in lc_msg.additional_kwargs:
                     computer_call_output["acknowledged_safety_checks"] = lc_msg.additional_kwargs[
                         "acknowledged_safety_checks"
                     ]
                 input_.append(computer_call_output)
+            # =====================================================
 
             else:
                 tool_output = _ensure_valid_tool_message_content(tool_output)
@@ -4557,7 +4548,7 @@ def _construct_lc_result_from_responses_api(
                 }
                 invalid_tool_calls.append(tool_call)
 
-        # 追加
+
         elif output.type == "custom_tool_call":
             content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
             tool_call = {
@@ -4568,6 +4559,7 @@ def _construct_lc_result_from_responses_api(
             }
             tool_calls.append(tool_call)
 
+        # 追加
         elif output.type == "computer_call":
             content_blocks.append(output.model_dump(exclude_none=True, mode="json"))
             tool_call = {
@@ -4806,7 +4798,7 @@ def _convert_responses_chunk_to_generation_chunk(
         "compaction",
         "web_search_call",
         "file_search_call",
-        #"computer_call",
+        #"computer_call", <==いらない、入れない。
         "code_interpreter_call",
         "mcp_call",
         "mcp_list_tools",
@@ -4836,6 +4828,8 @@ def _convert_responses_chunk_to_generation_chunk(
                 "index": current_index,
             }
         )
+
+    # ====おそらくここが、tool callを実際に呼ぶための処理====
     # 追加: ここでcomputer_callのdoneイベントをキャッチして、tool_callsに追加する。これで、computer_callも通常のtool_callと同様に扱えるようになる。
     elif chunk.type == "response.output_item.done" and chunk.item.type == "computer_call":
         _advance(chunk.output_index)
@@ -4853,6 +4847,7 @@ def _convert_responses_chunk_to_generation_chunk(
         )
 
         logger.warning("DEBUG:::::: Computer call output tool calls (done): %s", tool_call_chunks)
+    # =====================
 
     elif chunk.type == "response.function_call_arguments.delta":
         _advance(chunk.output_index)

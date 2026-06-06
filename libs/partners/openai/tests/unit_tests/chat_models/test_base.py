@@ -76,7 +76,7 @@ from langchain_openai.chat_models.base import (
     _create_usage_metadata_responses,
     _format_message_content,
     _get_last_messages,
-    _make_computer_call_output_from_message,
+    # 削除 _make_computer_call_output_from_message,
     _model_prefers_responses_api,
     _oai_structured_outputs_parser,
     _resize,
@@ -3079,77 +3079,8 @@ def test_get_request_payload_use_previous_response_id() -> None:
     assert len(payload["input"]) == 1
 
 
-def test_make_computer_call_output_from_message() -> None:
-    # List content
-    tool_message = ToolMessage(
-        content=[
-            {"type": "input_image", "image_url": "data:image/png;base64,<image_data>"}
-        ],
-        tool_call_id="call_abc123",
-        additional_kwargs={"type": "computer_call_output"},
-    )
-    result = _make_computer_call_output_from_message(tool_message)
+# 削除 def test_make_computer_call_output_from_message() -> None:
 
-    assert result == {
-        "type": "computer_call_output",
-        "call_id": "call_abc123",
-        "output": {
-            "type": "input_image",
-            "image_url": "data:image/png;base64,<image_data>",
-        },
-    }
-
-    # String content
-    tool_message = ToolMessage(
-        content="data:image/png;base64,<image_data>",
-        tool_call_id="call_abc123",
-        additional_kwargs={"type": "computer_call_output"},
-    )
-    result = _make_computer_call_output_from_message(tool_message)
-
-    assert result == {
-        "type": "computer_call_output",
-        "call_id": "call_abc123",
-        "output": {
-            "type": "input_image",
-            "image_url": "data:image/png;base64,<image_data>",
-        },
-    }
-
-    # Safety checks
-    tool_message = ToolMessage(
-        content=[
-            {"type": "input_image", "image_url": "data:image/png;base64,<image_data>"}
-        ],
-        tool_call_id="call_abc123",
-        additional_kwargs={
-            "type": "computer_call_output",
-            "acknowledged_safety_checks": [
-                {
-                    "id": "cu_sc_abc234",
-                    "code": "malicious_instructions",
-                    "message": "Malicious instructions detected.",
-                }
-            ],
-        },
-    )
-    result = _make_computer_call_output_from_message(tool_message)
-
-    assert result == {
-        "type": "computer_call_output",
-        "call_id": "call_abc123",
-        "output": {
-            "type": "input_image",
-            "image_url": "data:image/png;base64,<image_data>",
-        },
-        "acknowledged_safety_checks": [
-            {
-                "id": "cu_sc_abc234",
-                "code": "malicious_instructions",
-                "message": "Malicious instructions detected.",
-            }
-        ],
-    }
 
 
 def test_lc_tool_call_to_openai_tool_call_unicode() -> None:
