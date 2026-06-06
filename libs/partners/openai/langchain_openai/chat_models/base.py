@@ -4269,44 +4269,38 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                 print(msg.get("extras") or {})
                 print("=============================================================")
 
-                if isinstance(tool_output, list):
-                    if len(tool_output) != 1:
-                        raise ValueError(
+
+                if len(tool_output) == 0:
+                    computer_call_output_content = {}
+
+                else:
+                    # Expect the first content as the main output (screenshot)
+                    if len(tool_output) > 1:
+                        logger.warning(
                             "Expected exactly one content block for computer_call_output, "
                             f"but got {len(tool_output)}: {tool_output}"
+                            "Omitting this tool output from the input to the Responses API."
                         )
-                    tool_output = tool_output[0]
+                    computer_call_output_content = tool_output[0]
 
-                if not isinstance(tool_output, dict):
-                    raise ValueError(
-                        "Expected dict content block for computer_call_output, "
-                        f"but got: {tool_output}"
-                    )
+                    # Try to set 'detail' field for computer_call_output from extras
+                    extras = lc_msg["content"][0].get("extras") if isinstance(lc_msg["content"], list) else None
+                    if extras:
+                        if "detail" in extras:
+                            computer_call_output_content["detail"] = extras["detail"]
 
-                if tool_output.get("type") == "input_image":
-                    output = {**tool_output, "type": "computer_screenshot"}
-                elif tool_output.get("type") == "computer_screenshot":
-                    output = dict(tool_output)
-                else:
-                    raise ValueError(
-                        "Expected content block of type 'input_image' or "
-                        "'computer_screenshot' for computer_call_output, "
-                        f"but got: {tool_output}"
-                    )
+                    # Ensure the type is correct for computer_call_output content
+                    if computer_call_output_content.get("type") == "input_image":
+                        computer_call_output_content["type"] = "computer_screenshot"
 
-                if "detail" not in output:
-                    # Try to find "detail" from extras
-                    extras = lc_msg.get("extras") or {}
-                    detail = extras.get("detail")
-                    if detail:
-                        output["detail"] = detail
-
+                # Construct the computer_call_output block with the cleaned content
                 computer_call_output = {
                     "type": "computer_call_output",
                     "call_id": lc_msg.tool_call_id,
-                    "output": output,
+                    "output": computer_call_output_content,
                 }
 
+                # If there are acknowledged safety checks, include them in the computer_call_output
                 if "acknowledged_safety_checks" in lc_msg.additional_kwargs:
                     computer_call_output["acknowledged_safety_checks"] = (
                         lc_msg.additional_kwargs["acknowledged_safety_checks"]
