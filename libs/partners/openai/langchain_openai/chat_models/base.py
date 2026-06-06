@@ -4268,19 +4268,16 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                     )
 
                 if "detail" not in output:
-                    detail = (
-                        lc_msg.additional_kwargs.get("detail")
-                        or lc_msg.response_metadata.get("detail")
-                    )
+                    # Try to find "detail" from extras
+                    extras = lc_msg.additional_kwargs.get("extras") or {}
+                    detail = extras.get("detail")
                     if detail:
                         output["detail"] = detail
 
-                print("=============================================================")
-                print("DEBUG:::::: details: ")
-                print(lc_msg.additional_kwargs.get("detail"))
-                print("DEBUG:::::: details from response_metadata: ")
-                print(lc_msg.response_metadata.get("detail"))
-                print("=============================================================")
+                    print("=============================================================")
+                    print("DEBUG:::::: details: ")
+                    print(detail)
+                    print("=============================================================")
 
                 computer_call_output = {
                     "type": "computer_call_output",
