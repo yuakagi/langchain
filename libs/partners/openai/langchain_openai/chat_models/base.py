@@ -4242,6 +4242,18 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
             # 追加！重要 (既存の_make_computer_call_output_from_messageをバイパスして、ここでcleaningされたoutputを含むcomputer_call_outputに追加する処理を入れる)
             # 既存の_make_computer_call_output_from_messageは、lc_msgを直接使うため、openAI形式に変換されてないinputがそのまま使われてしまう。
             elif lc_msg.additional_kwargs.get("type") == "computer_call_output":
+
+                print("=============================================================")
+                print("DEBUG:::::: lc_msg: ")
+                print(lc_msg)
+                print("=============================================================")
+
+
+                print("=============================================================")
+                print("DEBUG:::::: msg: ")
+                print(msg)
+                print("=============================================================")
+
                 if isinstance(tool_output, list):
                     if len(tool_output) != 1:
                         raise ValueError(
@@ -4273,11 +4285,6 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                     detail = extras.get("detail")
                     if detail:
                         output["detail"] = detail
-
-                    print("=============================================================")
-                    print("DEBUG:::::: details: ")
-                    print(detail)
-                    print("=============================================================")
 
                 computer_call_output = {
                     "type": "computer_call_output",
