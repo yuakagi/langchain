@@ -179,7 +179,7 @@ WellKnownTools = (
     "web_search_preview",
     "web_search",
     "computer",
-    "computer_use_preview",
+    #削除 "computer_use_preview",
     "code_interpreter",
     "mcp",
     "image_generation",
@@ -842,6 +842,7 @@ class BaseChatOpenAI(BaseChatModel):
     [context management](https://developers.openai.com/api/docs/guides/compaction).
     """
 
+    # 追加::`'computer_call_output.output.image_url'`じゃなくてcomputer_call_output.computer_screenshot追加しないと？？・
     include: list[str] | None = None
     """Additional fields to include in generations from Responses API.
 
@@ -4241,7 +4242,6 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
             # 追加！重要 (既存の_make_computer_call_output_from_messageをバイパスして、ここでcleaningされたoutputを含むcomputer_call_outputに追加する処理を入れる)
             # 既存の_make_computer_call_output_from_messageは、lc_msgを直接使うため、openAI形式に変換されてないinputがそのまま使われてしまう。
             elif lc_msg.additional_kwargs.get("type") == "computer_call_output":
-
                 if isinstance(tool_output, list):
                     if len(tool_output) != 1:
                         raise ValueError(
@@ -4250,38 +4250,48 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
                         )
                     tool_output = tool_output[0]
 
-                if not (isinstance(tool_output, dict) and tool_output.get("type") in ["input_image", "computer_screenshot"]):
+                if not isinstance(tool_output, dict):
                     raise ValueError(
-                        "Expected content block of type 'input_image' or 'computer_screenshot' for computer_call_output, "
+                        "Expected dict content block for computer_call_output, "
                         f"but got: {tool_output}"
                     )
 
-                # Ensure tool_output type is `computer_screenshot`
-                if "type" in tool_output and tool_output["type"] == "input_image":
-                    tool_output["type"] = "computer_screenshot"
+                if tool_output.get("type") == "input_image":
+                    output = {**tool_output, "type": "computer_screenshot"}
+                elif tool_output.get("type") == "computer_screenshot":
+                    output = dict(tool_output)
+                else:
+                    raise ValueError(
+                        "Expected content block of type 'input_image' or "
+                        "'computer_screenshot' for computer_call_output, "
+                        f"but got: {tool_output}"
+                    )
 
-                print("================== Debug: Constructing computer_call_output with tool_output =================")  # noqa: E501
-                print(f"Original tool_output: {tool_output}")  # noqa: E501
-                print(f"Additional kwargs: {lc_msg.additional_kwargs}")  # noqa: E501
-                print("==============================================================================================")  # noqa: E501
+                if "detail" not in output:
+                    detail = (
+                        lc_msg.additional_kwargs.get("detail")
+                        or lc_msg.response_metadata.get("detail")
+                    )
+                    if detail:
+                        output["detail"] = detail
 
-                # construct computer_call_output
                 computer_call_output = {
                     "type": "computer_call_output",
                     "call_id": lc_msg.tool_call_id,
-                    "output": tool_output,
+                    "output": output,
                 }
-                # "detail": "original"など、追加されたパラメーターをここで追加する場所はここが適切(lc_msgにextraに配分されてる)
-                extra_computer_call_output = getattr(lc_msg, "extra", None)
-                if extra_computer_call_output is not None:
-                    computer_call_output["output"].update(extra_computer_call_output)
 
-                # acknowledged_safety_checksを、既存処置に矛盾ないよう加える。
                 if "acknowledged_safety_checks" in lc_msg.additional_kwargs:
-                    computer_call_output["acknowledged_safety_checks"] = lc_msg.additional_kwargs[
-                        "acknowledged_safety_checks"
-                    ]
+                    computer_call_output["acknowledged_safety_checks"] = (
+                        lc_msg.additional_kwargs["acknowledged_safety_checks"]
+                    )
+
                 input_.append(computer_call_output)
+
+                print("=============================================================")
+                print("DEBUG:::::: tool_output after processing computer_call_output: ")
+                print(computer_call_output)
+                print("=============================================================")
             # =====================================================
 
             else:
